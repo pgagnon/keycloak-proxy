@@ -55,6 +55,12 @@ func (r *oauthProxy) getRedirectionURL(w http.ResponseWriter, req *http.Request)
 		redirect = r.config.RedirectionURL
 	}
 
+	state, _ := req.Cookie("OAuth_Token_Request_State")
+	if state != nil && req.URL.Query().Get("state") != state.Value {
+		r.log.Error("State parameter mismatch")
+		w.WriteHeader(http.StatusForbidden)
+		return ""
+	}
 	return fmt.Sprintf("%s%s", redirect, r.config.WithOAuthURI("callback"))
 }
 
@@ -195,20 +201,20 @@ func (r *oauthProxy) oauthCallbackHandler(w http.ResponseWriter, req *http.Reque
 		r.dropAccessTokenCookie(req, w, accessToken, time.Until(identity.ExpiresAt))
 	}
 
-	// step: decode the state variable
-	state := "/"
+	// step: decode the request variable
+	redirectURI := "/"
 	if req.URL.Query().Get("state") != "" {
-		decoded, err := base64.StdEncoding.DecodeString(req.URL.Query().Get("state"))
-		if err != nil {
-			r.log.Warn("unable to decode the state parameter",
-				zap.String("state", req.URL.Query().Get("state")),
-				zap.Error(err))
-		} else {
-			state = string(decoded)
+		if encodedRequestURI, _ := req.Cookie("request_uri"); encodedRequestURI != nil {
+			decoded, _ := base64.StdEncoding.DecodeString(encodedRequestURI.Value)
+			redirectURI = string(decoded)
 		}
 	}
+	if r.config.BaseURI != "" {
+		// assuming state starts with slash
+		redirectURI = r.config.BaseURI + redirectURI
+	}
 
-	r.redirectToURL(state, w, req, http.StatusTemporaryRedirect)
+	r.redirectToURL(redirectURI, w, req, http.StatusTemporaryRedirect)
 }
 
 // loginHandler provide's a generic endpoint for clients to perform a user_credentials login to the provider
