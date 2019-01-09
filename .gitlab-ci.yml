@@ -1,0 +1,22 @@
+# This file is a template, and might need editing before it works on your project.
+# Official docker image.
+image: docker:latest
+
+services:
+  - name: docker:stable-dind
+    command: [ "--mtu", "1412" ]
+
+variables:
+  DOCKER_HOST: tcp://localhost:2375
+  GIT_SUBMODULE_STRATEGY: recursive
+
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build --pull -t "${CI_REGISTRY_IMAGE}:gitlab-${CI_PIPELINE_ID}" -t "${CI_REGISTRY_IMAGE}:latest" -f Dockerfile .
+    - docker push "${CI_REGISTRY_IMAGE}:gitlab-${CI_PIPELINE_ID}"
+    - docker push "${CI_REGISTRY_IMAGE}:latest"
